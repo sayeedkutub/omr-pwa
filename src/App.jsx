@@ -265,7 +265,7 @@ function StudentScreen({ cfg, answerKey, students, setStudents, onPrev, onResult
     resetEntry();
   };
 
-  /* ── AI analysis ── */
+  /* ── Load image ── */
   const loadImg = (file) => {
     if (!file) return;
     const reader = new FileReader();
@@ -273,30 +273,26 @@ function StudentScreen({ cfg, answerKey, students, setStudents, onPrev, onResult
     reader.readAsDataURL(file);
   };
 
+  /* ── AI analysis via Hugging Face (free) ── */
   const runAI = async () => {
     if (!imgData) return;
     setAiStatus("scanning"); setAiErr("");
     const base64 = imgData.split(",")[1];
     const mime   = imgData.split(";")[0].split(":")[1];
-    const prompt = `এটি মহানগর ক্যাডেট একাডেমির OMR উত্তরপত্রের ছবি।
-ফরম্যাট: "নৈর্বৃত্তিক অভিযার উত্তরপত্র" অংশে ৩ কলামে মোট ${cfg.totalQ}টি প্রশ্ন।
-প্রতিটিতে ${cfg.opts}টি বিকল্প: ${OPTS.slice(0, cfg.opts).join(", ")} (বাংলা অক্ষরে গোলাকার বুলবুল)।
-কালো/ভরাট বুলবুল = উত্তর। 0=ক,1=খ,2=গ,3=ঘ,4=ঙ, null=খালি।
-শুধু JSON দাও: {"answers":[...${cfg.totalQ}টি মান...]}`;
+    const prompt = `This is an OMR answer sheet from Mahanagar Cadet Academy (Bangladesh).
+The sheet has ${cfg.totalQ} questions with ${cfg.opts} options each: ${OPTS.slice(0, cfg.opts).join(", ")} (Bengali letters in circular bubbles).
+Filled/dark bubbles indicate the selected answer.
+Map: 0=ক, 1=খ, 2=গ, 3=ঘ, 4=ঙ. Use null for unanswered.
+Return ONLY a JSON object: {"answers":[...${cfg.totalQ} values...]}`;
     try {
-      const res  = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514", max_tokens: 1000,
-          messages: [{ role: "user", content: [
-            { type: "image", source: { type: "base64", media_type: mime, data: base64 } },
-            { type: "text",  text: prompt },
-          ]}],
-        }),
+        body: JSON.stringify({ imageBase64: base64, mimeType: mime, prompt }),
       });
       const data = await res.json();
-      const text = data.content?.find(b => b.type === "text")?.text || "";
+      if (data.error) throw new Error(data.error);
+      const text = data.text || "";
       const match = text.match(/\{[\s\S]*?"answers"[\s\S]*?\}/);
       if (!match) throw new Error("JSON পাওয়া যায়নি");
       let ans = JSON.parse(match[0]).answers;
