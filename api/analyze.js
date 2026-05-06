@@ -1,5 +1,5 @@
-// Vercel Serverless Function — proxies to Hugging Face Inference API (FREE)
-// Uses Qwen2.5-VL vision model for OMR bubble detection
+// Vercel Serverless Function — proxies to Hugging Face via novita provider (FREE)
+// Uses Llama-4-Scout vision model for OMR bubble detection
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -8,14 +8,14 @@ export default async function handler(req, res) {
 
   const hfToken = process.env.HF_TOKEN;
   if (!hfToken) {
-    return res.status(500).json({ error: "HF_TOKEN is not configured. Get a free token from huggingface.co/settings/tokens" });
+    return res.status(500).json({ error: "HF_TOKEN is not configured." });
   }
 
   try {
     const { imageBase64, mimeType, prompt } = req.body;
 
     const response = await fetch(
-      "https://router.huggingface.co/hf-inference/models/Qwen/Qwen2.5-VL-7B-Instruct/v1/chat/completions",
+      "https://router.huggingface.co/novita/v1/chat/completions",
       {
         method: "POST",
         headers: {
@@ -23,7 +23,7 @@ export default async function handler(req, res) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "Qwen/Qwen2.5-VL-7B-Instruct",
+          model: "meta-llama/Llama-4-Scout-17B-16E-Instruct",
           messages: [
             {
               role: "user",
@@ -44,11 +44,10 @@ export default async function handler(req, res) {
     const data = await response.json();
 
     if (!response.ok) {
-      const errMsg = data.error || data.message || "Hugging Face API error";
+      const errMsg = data.error?.message || data.error || data.message || "API error";
       return res.status(response.status).json({ error: errMsg });
     }
 
-    // Extract text from HF response (OpenAI-compatible format)
     const text = data.choices?.[0]?.message?.content || "";
     return res.status(200).json({ text });
   } catch (err) {
